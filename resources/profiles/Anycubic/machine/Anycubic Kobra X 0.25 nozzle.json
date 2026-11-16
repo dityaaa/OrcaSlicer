@@ -154,7 +154,7 @@
 	],
 	"nozzle_height": "4",
 	"nozzle_hrc": "0",
-	"nozzle_type": "brass",
+	"nozzle_type": "hardened_steel",
 	"nozzle_volume": "79",
 	"parking_pos_retraction": "0",
 	"pellet_modded_printer": "0",
