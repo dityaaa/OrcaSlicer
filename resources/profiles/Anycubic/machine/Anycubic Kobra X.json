@@ -4,9 +4,9 @@
 	"machine_tech": "FFF",
 	"family": "Anycubic",
 	"model_id": "Anycubic Kobra X",
-	"nozzle_diameter": "0.4",
+	"nozzle_diameter": "0.4;0.25;0.6;0.8",
 	"bed_model": "Anycubic Kobra X_buildplate_model.stl",
 	"bed_texture": "Anycubic Kobra X_buildplate_texture.svg",
 	"hotend_model": "Anycubic-hotend.stl",
-	"default_materials": "Anycubic PLA @Anycubic Kobra X 0.4 nozzle"
+	"default_materials": "Anycubic PLA @Anycubic Kobra X 0.4 nozzle;Anycubic PLA @Anycubic Kobra X 0.25 nozzle;Anycubic PLA @Anycubic Kobra X 0.6 nozzle;Anycubic PLA @Anycubic Kobra X 0.8 nozzle"
 }
