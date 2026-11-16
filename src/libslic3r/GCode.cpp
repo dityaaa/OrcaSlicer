@@ -4309,6 +4309,31 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
         file.writeln(out.str());
     }
 
+    if (print.config().printer_model.value == "Anycubic Kobra X") {
+        auto format_float = [](double value) {
+            std::ostringstream out;
+            out << std::setprecision(6) << value;
+            std::string text = out.str();
+            if (text.find_first_of(".en") == std::string::npos)
+                text += ".0";
+            return text;
+        };
+        auto format_floats = [&format_float](const std::vector<double> &values) {
+            std::string text = "[";
+            for (size_t idx = 0; idx < values.size(); ++idx)
+                text += (idx ? "," : "") + format_float(values[idx]);
+            return text + "]";
+        };
+        const std::vector<double> flush_multipliers = print.config().flush_multiplier.values;
+        const std::vector<double> channel_multipliers(print.config().filament_diameter.values.size(), 1.0);
+        file.write_format("; project_info = {\"flush_multiplier\":%s,\"flush_volumes_chan_multipliers\":%s,\"flush_volumes_matrix\":%s,\"flush_volumes_vector\":%s}\n",
+            format_float(flush_multipliers.empty() ? 1.0 : flush_multipliers.front()).c_str(),
+            format_floats(channel_multipliers).c_str(),
+            format_floats(print.config().flush_volumes_matrix.values).c_str(),
+            format_floats(print.config().flush_volumes_vector.values).c_str());
+        file.write_format("; flush_multiplier_calculate_by_acnext: 1\n");
+    }
+
     file.write_format("; HEADER_BLOCK_END\n\n");
     }
 
