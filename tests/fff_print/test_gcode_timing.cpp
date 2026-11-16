@@ -869,3 +869,59 @@ TEST_CASE("M400 without a delay waits for the queue to drain", "[GCodeTiming][Kl
     REQUIRE_THAT(klipper_time("G90\nG1 X40 F30000\nM400\nG1 X80\n"),
                  WithinRel(2.0 * rest_to_rest_time(40.0, 500.0, klipper_accel, klipper_pseudo_accel), 1e-6));
 }
+
+namespace {
+
+double estimated_time(const std::string& body)
+{
+    const std::string gcode = "G1 X10 Y10 Z0.2 F6000\nG1 X20 Y10 F6000\nM83\n" + body + "G1 X30 Y10 F6000\nG1 X40 Y10 F6000\n";
+    GCodeProcessor processor;
+    run_processor(processor, make_config(0.0, 0.0, 0.0), gcode.c_str(), false);
+    return processor.get_time(PrintEstimatedStatistics::ETimeMode::Normal);
+}
+
+double flushed_volume(const std::string& body)
+{
+    const std::string gcode = "G1 X10 Y10 Z0.2 F6000\nG1 X20 Y10 F6000\nM83\n" + body + "G1 X30 Y10 F6000\nG1 X40 Y10 F6000\n";
+    GCodeProcessor processor;
+    run_processor(processor, make_config(0.0, 0.0, 0.0), gcode.c_str(), false);
+    double total = 0.0;
+    for (const auto& [filament_id, volume] : processor.get_result().print_statistics.flush_per_filament)
+        total += volume;
+    return total;
+}
+
+} // namespace
+
+TEST_CASE("A comment starting with three semicolons and a space counts as a command in the estimates", "[GCodeTiming][SimulatedCommands]")
+{
+    const double filament_area = M_PI * 0.875 * 0.875;
+
+    SECTION("an extrusion inside a flush block is counted as flushed volume")
+    {
+        CHECK_THAT(flushed_volume("; FLUSH_START\n;;; G1 E10 F300\n; FLUSH_END\n"), WithinAbs(10.0 * filament_area, 1e-2));
+    }
+    SECTION("an extrusion outside a flush block is not counted as flushed volume")
+    {
+        CHECK_THAT(flushed_volume(";;; G1 E10 F300\n"), WithinAbs(0.0, 1e-6));
+    }
+    SECTION("comments with other prefixes are ignored")
+    {
+        CHECK_THAT(flushed_volume("; FLUSH_START\n;;;G1 E10 F300\n;; G1 E10 F300\n; G1 E10 F300\n; FLUSH_END\n"), WithinAbs(0.0, 1e-6));
+    }
+    SECTION("a wait adds its duration")
+    {
+        const double baseline = estimated_time("");
+        CHECK_THAT(estimated_time(";;; M400 P1000\n") - baseline, WithinAbs(1.0, 1e-2));
+    }
+    SECTION("a simulated move adds its travel time")
+    {
+        const double baseline = estimated_time("");
+        CHECK(estimated_time("; FLUSH_START\n;;; G1 E10 F300\n; FLUSH_END\n") - baseline > 1.9);
+    }
+    SECTION("the position from before the block is back after the block ends")
+    {
+        const double baseline = estimated_time("");
+        CHECK_THAT(estimated_time("; FLUSH_START\n;;; G1 X100 F600\n; FLUSH_END\n") - baseline, WithinAbs(8.0, 0.3));
+    }
+}

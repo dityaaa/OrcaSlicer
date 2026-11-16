@@ -171,6 +171,7 @@ const std::string GCodeProcessor::Flush_Start_Tag = " FLUSH_START";
 const std::string GCodeProcessor::Flush_End_Tag = " FLUSH_END";
 const std::string GCodeProcessor::VFlush_Start_Tag = " VFLUSH_START";
 const std::string GCodeProcessor::VFlush_End_Tag  = " VFLUSH_END";
+const std::string GCodeProcessor::Simulated_Command_Prefix = ";;; ";
 
 //Orca: External device purge tag
 const std::string GCodeProcessor::External_Purge_Tag = " EXTERNAL_PURGE";
@@ -3739,6 +3740,7 @@ void GCodeProcessor::reset()
     m_cached_position.reset();
     m_wiping = false;
     m_flushing = false;
+    m_position_before_simulated_commands.reset();
     m_virtual_flushing = false;
     m_wipe_tower = false;
     // reset SKIPPABLE tracking + the collected ranges (stored on the member; see run_post_process).
@@ -4222,7 +4224,9 @@ void GCodeProcessor::process_gcode_line(const GCodeReader::GCodeLine& line, bool
         if (comment.length() > 2 && comment.front() == ';')
         {
             std::string comment_content = comment.substr(1); // only format like ";V{cmd}" is valid
-            if (comment_content[0] == 'V' || comment_content[0] == 'v') {
+            if (boost::starts_with(comment, Simulated_Command_Prefix))
+                process_simulated_command(comment.substr(Simulated_Command_Prefix.length()));
+            else if (comment_content[0] == 'V' || comment_content[0] == 'v') {
                 GCodeReader reader;
                 GCodeReader::GCodeLine new_line;
                 reader.parse_line(comment_content, [&new_line](const auto& greader, const auto& gline) {
@@ -4237,6 +4241,37 @@ void GCodeProcessor::process_gcode_line(const GCodeReader::GCodeLine& line, bool
             }
         }
     }
+}
+
+void GCodeProcessor::process_simulated_command(const std::string& command_text)
+{
+    GCodeReader reader;
+    GCodeReader::GCodeLine command_line;
+    reader.parse_line(command_text, [&command_line](const auto& greader, const auto& gline) {
+        command_line = gline;
+    });
+
+    const std::string_view cmd = command_line.cmd();
+    if (!(cmd == "G0" || cmd == "G1" || cmd == "G4" || cmd == "M400"))
+        return;
+
+    if (!m_position_before_simulated_commands.has_value())
+        m_position_before_simulated_commands = SimulatedCommandsOrigin{ m_start_position[X], m_start_position[Y], m_start_position[Z], m_feedrate };
+
+    m_command_processor.process_comand(cmd, command_line);
+}
+
+void GCodeProcessor::end_simulated_commands()
+{
+    if (!m_position_before_simulated_commands.has_value())
+        return;
+
+    const SimulatedCommandsOrigin& origin = *m_position_before_simulated_commands;
+    m_end_position[X] = origin.x;
+    m_end_position[Y] = origin.y;
+    m_end_position[Z] = origin.z;
+    m_feedrate = origin.feedrate;
+    m_position_before_simulated_commands.reset();
 }
 
 int GCodeProcessor::get_gcode_last_filament(const std::string& gcode_str)
@@ -4536,6 +4571,7 @@ void GCodeProcessor::process_tags(const std::string_view comment, bool producers
     //BBS: flush end tag
     if (boost::starts_with(comment, GCodeProcessor::Flush_End_Tag)) {
         m_flushing = false;
+        end_simulated_commands();
         return;
     }
 

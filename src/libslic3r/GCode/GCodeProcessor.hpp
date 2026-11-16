@@ -597,6 +597,7 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
         static const std::string Flush_End_Tag;
         static const std::string VFlush_Start_Tag;
         static const std::string VFlush_End_Tag;
+        static const std::string Simulated_Command_Prefix;
         static const std::string External_Purge_Tag;
     public:
         // Size of the blocks the post-processing passes write the G-code in
@@ -1257,6 +1258,8 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
         CachedPosition m_cached_position;
         bool m_wiping;
         bool m_flushing; // mark a section with real flush
+        struct SimulatedCommandsOrigin { float x; float y; float z; float feedrate; };
+        std::optional<SimulatedCommandsOrigin> m_position_before_simulated_commands;
         bool m_virtual_flushing; // mark a section with virtual flush, only for statistics
         bool m_wipe_tower;
         // Current-section SKIPPABLE state. Set by process_tags when inside a SKIPPABLE_* region;
@@ -1496,6 +1499,8 @@ inline constexpr float DEFAULT_FILAMENT_DENSITY = 1.245f;
 
         // Process tags embedded into comments
         void process_tags(const std::string_view comment, bool producers_enabled);
+        void process_simulated_command(const std::string& command_text);
+        void end_simulated_commands();
         bool process_producers_tags(const std::string_view comment);
         bool process_bambuslicer_tags(const std::string_view comment);
         bool process_cura_tags(const std::string_view comment);
